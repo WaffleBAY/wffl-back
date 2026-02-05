@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                       String    @id @default(uuid())
+  walletAddress            String    @unique
+  nullifierHash            String?   @unique
+  username                 String?
+  profilePictureUrl        String?
+  refreshToken             String?   // Hashed refresh token for JWT validation
+  worldIdVerifiedAt        DateTime? // Timestamp when WorldID was verified (null = not verified)
+  worldIdVerificationLevel String?   // Verification level ('orb' only for this project)
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  lotteries                Lottery[] @relation("CreatorLotteries")
+  entries                  Entry[]
+}
+
+model Lottery {
+  id          String        @id @default(uuid())
+  title       String
+  description String?
+  prize       String
+  imageUrl    String?
+  ticketPrice Decimal       @db.Decimal(18, 8)
+  maxTickets  Int
+  soldTickets Int           @default(0)
+  startDate   DateTime
+  endDate     DateTime
+  status      LotteryStatus @default(PENDING)
+  region      String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  creatorId   String
+  creator     User          @relation("CreatorLotteries", fields: [creatorId], references: [id])
+  entries     Entry[]
+  winnerId    String?
+}
+
+model Entry {
+  id          String    @id @default(uuid())
+  ticketCount Int       @default(1)
+  createdAt   DateTime  @default(now())
+
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  lotteryId   String
+  lottery     Lottery   @relation(fields: [lotteryId], references: [id])
+
+  @@unique([userId, lotteryId])
+}
+
+enum LotteryStatus {
+  PENDING
+  ACTIVE
+  CLOSED
+  CALCULATING
+  WAITING_DELIVERY
+  SHIPPED
+  COMPLETED
+  DISPUTED
+  CANCELLED
+}
