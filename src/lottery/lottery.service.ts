@@ -3,8 +3,9 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { Prisma, LotteryStatus } from '@prisma/client';
+import { Prisma, LotteryStatus, Lottery } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationService } from '../notification/notification.service';
 import { CreateLotteryDto } from './dto/create-lottery.dto';
 import { LotteryListQueryDto } from './dto/lottery-list-query.dto';
 import {
@@ -14,9 +15,66 @@ import {
 import { UpdateLotteryDto } from './dto/update-lottery.dto';
 import { CreateEntryDto } from './dto/create-entry.dto';
 
+// Type for lottery with included relations
+type LotteryWithRelations = Lottery & {
+  creator: {
+    id: string;
+    username: string | null;
+    profilePictureUrl: string | null;
+  };
+  _count: {
+    entries: number;
+  };
+};
+
 @Injectable()
 export class LotteryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationService: NotificationService,
+  ) {}
+
+  /**
+   * Map a Lottery entity to LotteryResponseDto
+   */
+  private mapToResponse(lottery: LotteryWithRelations): LotteryResponseDto {
+    return {
+      id: lottery.id,
+      title: lottery.title,
+      description: lottery.description,
+      prize: lottery.prize,
+      imageUrl: lottery.imageUrl,
+      contractAddress: lottery.contractAddress,
+      marketType: lottery.marketType,
+      ticketPrice: lottery.ticketPrice,
+      goalAmount: lottery.goalAmount,
+      sellerDeposit: lottery.sellerDeposit,
+      prizePool: lottery.prizePool,
+      participantDeposit: lottery.participantDeposit,
+      preparedQuantity: lottery.preparedQuantity,
+      endTime: lottery.endTime,
+      duration: lottery.duration,
+      status: lottery.status,
+      participantCount: lottery.participantCount,
+      winners: lottery.winners,
+      shippingRegions: lottery.shippingRegions,
+      region: lottery.region,
+      snapshotBlock: lottery.snapshotBlock,
+      commitment: lottery.commitment,
+      nonce: lottery.nonce,
+      createdAt: lottery.createdAt,
+      openedAt: lottery.openedAt,
+      closedAt: lottery.closedAt,
+      revealedAt: lottery.revealedAt,
+      completedAt: lottery.completedAt,
+      creator: {
+        id: lottery.creator.id,
+        username: lottery.creator.username,
+        profilePictureUrl: lottery.creator.profilePictureUrl,
+      },
+      entriesCount: lottery._count.entries,
+    };
+  }
 
   async findAll(query: LotteryListQueryDto): Promise<LotteryListResponseDto> {
     const page = query.page ?? 1;
@@ -62,27 +120,9 @@ export class LotteryService {
       this.prisma.lottery.count({ where }),
     ]);
 
-    const items: LotteryResponseDto[] = lotteries.map((lottery) => ({
-      id: lottery.id,
-      title: lottery.title,
-      description: lottery.description,
-      prize: lottery.prize,
-      imageUrl: lottery.imageUrl,
-      ticketPrice: lottery.ticketPrice.toString(), // Convert Decimal to string
-      maxTickets: lottery.maxTickets,
-      soldTickets: lottery.soldTickets,
-      startDate: lottery.startDate,
-      endDate: lottery.endDate,
-      status: lottery.status,
-      region: lottery.region,
-      creator: {
-        id: lottery.creator.id,
-        username: lottery.creator.username,
-        profilePictureUrl: lottery.creator.profilePictureUrl,
-      },
-      entriesCount: lottery._count.entries,
-      createdAt: lottery.createdAt,
-    }));
+    const items: LotteryResponseDto[] = lotteries.map((lottery) =>
+      this.mapToResponse(lottery),
+    );
 
     const totalPages = Math.ceil(total / limit);
 
@@ -120,27 +160,7 @@ export class LotteryService {
       throw new NotFoundException(`Lottery with ID "${id}" not found`);
     }
 
-    return {
-      id: lottery.id,
-      title: lottery.title,
-      description: lottery.description,
-      prize: lottery.prize,
-      imageUrl: lottery.imageUrl,
-      ticketPrice: lottery.ticketPrice.toString(), // Convert Decimal to string
-      maxTickets: lottery.maxTickets,
-      soldTickets: lottery.soldTickets,
-      startDate: lottery.startDate,
-      endDate: lottery.endDate,
-      status: lottery.status,
-      region: lottery.region,
-      creator: {
-        id: lottery.creator.id,
-        username: lottery.creator.username,
-        profilePictureUrl: lottery.creator.profilePictureUrl,
-      },
-      entriesCount: lottery._count.entries,
-      createdAt: lottery.createdAt,
-    };
+    return this.mapToResponse(lottery);
   }
 
   async create(
@@ -153,13 +173,17 @@ export class LotteryService {
         description: dto.description,
         prize: dto.prize,
         imageUrl: dto.imageUrl,
-        ticketPrice: new Prisma.Decimal(dto.ticketPrice),
-        maxTickets: dto.maxTickets,
-        startDate: new Date(dto.startDate),
-        endDate: new Date(dto.endDate),
-        region: dto.region,
+        marketType: dto.marketType ?? 'LOTTERY',
+        ticketPrice: dto.ticketPrice,
+        goalAmount: dto.goalAmount,
+        preparedQuantity: dto.preparedQuantity ?? 1,
+        endTime: new Date(dto.endTime * 1000), // Convert Unix timestamp to Date
+        duration: dto.duration,
+        shippingRegions: dto.shippingRegions ?? [],
+        region: dto.region, // Keep for backward compat
         creatorId: userId,
-        status: 'PENDING',
+        status: LotteryStatus.CREATED, // New default status
+        contractAddress: dto.contractAddress, // Save contract address from frontend
       },
     });
 
@@ -184,6 +208,12 @@ export class LotteryService {
     }
     if (dto.region !== undefined) {
       updateData.region = dto.region;
+    }
+    if (dto.status !== undefined) {
+      updateData.status = dto.status;
+    }
+    if (dto.contractAddress !== undefined) {
+      updateData.contractAddress = dto.contractAddress;
     }
 
     await this.prisma.lottery.update({
@@ -210,32 +240,29 @@ export class LotteryService {
           );
         }
 
-        // Check if lottery is active
-        if (lottery.status !== LotteryStatus.ACTIVE) {
+        // Check if lottery is open for entries
+        if (lottery.status !== LotteryStatus.OPEN) {
           throw new BadRequestException(
-            'This lottery is not currently active',
+            'This lottery is not currently open for entries',
           );
         }
 
-        // Check if tickets are available
-        if (lottery.soldTickets + ticketCount > lottery.maxTickets) {
-          throw new BadRequestException('Not enough tickets available');
-        }
-
-        // Create entry
+        // Create entry with WorldID fields
         const createdEntry = await tx.entry.create({
           data: {
             userId,
             lotteryId,
             ticketCount,
+            nullifierHash: dto.nullifierHash,
+            paidAmount: dto.paidAmount,
           },
         });
 
-        // Update sold tickets
+        // Update participant count
         await tx.lottery.update({
           where: { id: lotteryId },
           data: {
-            soldTickets: { increment: ticketCount },
+            participantCount: { increment: 1 },
           },
         });
 
@@ -245,16 +272,37 @@ export class LotteryService {
       // Return entry with lottery info
       const lottery = await this.findOne(lotteryId);
 
+      // Send entry confirmed notification (non-blocking)
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { walletAddress: true },
+      });
+      if (user) {
+        // Fire and forget - don't await to avoid blocking the response
+        this.notificationService
+          .sendEntryConfirmedNotification(
+            user.walletAddress,
+            lotteryId,
+            lottery.title,
+          )
+          .catch((err) => {
+            // Log but don't throw - notification failure shouldn't fail entry
+            console.error('Failed to send entry confirmed notification:', err);
+          });
+      }
+
       return {
         id: entry.id,
         ticketCount: entry.ticketCount,
+        nullifierHash: entry.nullifierHash,
+        paidAmount: entry.paidAmount,
         createdAt: entry.createdAt,
         lottery: {
           id: lottery.id,
           title: lottery.title,
           prize: lottery.prize,
-          soldTickets: lottery.soldTickets,
-          maxTickets: lottery.maxTickets,
+          participantCount: lottery.participantCount,
+          goalAmount: lottery.goalAmount,
         },
       };
     } catch (error) {
@@ -262,7 +310,7 @@ export class LotteryService {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
           throw new BadRequestException(
-            'You have already entered this lottery',
+            'You have already entered this lottery with this WorldID',
           );
         }
       }

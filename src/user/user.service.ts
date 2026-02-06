@@ -2,6 +2,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserResponseDto } from './dto/user-response.dto';
 import { WorldIdVerificationDto } from './dto/worldid-verification.dto';
+import { EntryListResponseDto } from './dto/entry-response.dto';
 
 @Injectable()
 export class UserService {
@@ -22,11 +23,11 @@ export class UserService {
 
     if (!user) return null;
 
-    // Count wins (entries where lottery.winnerId matches userId)
+    // Count wins (entries where isWinner is true)
     const winsCount = await this.prisma.entry.count({
       where: {
         userId,
-        lottery: { winnerId: userId },
+        isWinner: true,
       },
     });
 
@@ -92,5 +93,131 @@ export class UserService {
       throw new BadRequestException('User not found after update');
     }
     return result;
+  }
+
+  /**
+   * Find paginated entries for a user with lottery details.
+   */
+  async findEntries(
+    userId: string,
+    query: { page?: number; limit?: number },
+  ): Promise<EntryListResponseDto> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+    const skip = (page - 1) * limit;
+
+    const [entries, total] = await Promise.all([
+      this.prisma.entry.findMany({
+        where: { userId },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          lottery: {
+            include: {
+              creator: {
+                select: {
+                  id: true,
+                  username: true,
+                  profilePictureUrl: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.entry.count({ where: { userId } }),
+    ]);
+
+    return {
+      items: entries.map((entry) => ({
+        id: entry.id,
+        ticketCount: entry.ticketCount,
+        paidAmount: entry.paidAmount,
+        isWinner: entry.isWinner,
+        depositRefunded: entry.depositRefunded,
+        createdAt: entry.createdAt,
+        lottery: {
+          id: entry.lottery.id,
+          title: entry.lottery.title,
+          description: entry.lottery.description,
+          prize: entry.lottery.prize,
+          imageUrl: entry.lottery.imageUrl,
+          contractAddress: entry.lottery.contractAddress,
+          status: entry.lottery.status,
+          endTime: entry.lottery.endTime,
+          creator: entry.lottery.creator,
+        },
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
+   * Find paginated winning entries for a user with lottery details.
+   */
+  async findWinnings(
+    userId: string,
+    query: { page?: number; limit?: number },
+  ): Promise<EntryListResponseDto> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+    const skip = (page - 1) * limit;
+
+    const [entries, total] = await Promise.all([
+      this.prisma.entry.findMany({
+        where: { userId, isWinner: true },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          lottery: {
+            include: {
+              creator: {
+                select: {
+                  id: true,
+                  username: true,
+                  profilePictureUrl: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.entry.count({ where: { userId, isWinner: true } }),
+    ]);
+
+    return {
+      items: entries.map((entry) => ({
+        id: entry.id,
+        ticketCount: entry.ticketCount,
+        paidAmount: entry.paidAmount,
+        isWinner: entry.isWinner,
+        depositRefunded: entry.depositRefunded,
+        createdAt: entry.createdAt,
+        lottery: {
+          id: entry.lottery.id,
+          title: entry.lottery.title,
+          description: entry.lottery.description,
+          prize: entry.lottery.prize,
+          imageUrl: entry.lottery.imageUrl,
+          contractAddress: entry.lottery.contractAddress,
+          status: entry.lottery.status,
+          endTime: entry.lottery.endTime,
+          creator: entry.lottery.creator,
+        },
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 }

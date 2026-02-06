@@ -10,6 +10,8 @@ import { HealthModule } from './health/health.module';
 import { UserModule } from './user/user.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { LotteryModule } from './lottery/lottery.module';
+import { BlockchainModule } from './blockchain/blockchain.module';
+import { NotificationModule } from './notification/notification.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 
 @Module({
@@ -31,6 +33,24 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
         R2_SECRET_ACCESS_KEY: Joi.string().optional(),
         R2_BUCKET_NAME: Joi.string().optional(),
         R2_PUBLIC_URL: Joi.string().optional(),
+        // World App Push notification variables (required in production)
+        WORLD_APP_ID: Joi.string().when('NODE_ENV', {
+          is: 'production',
+          then: Joi.required().messages({
+            'any.required': 'WORLD_APP_ID is required in production for push notifications',
+          }),
+          otherwise: Joi.optional(),
+        }),
+        WORLD_APP_API_KEY: Joi.string().when('NODE_ENV', {
+          is: 'production',
+          then: Joi.required().messages({
+            'any.required': 'WORLD_APP_API_KEY is required in production for push notifications',
+          }),
+          otherwise: Joi.optional(),
+        }),
+        WORLD_CHAIN_RPC_URL: Joi.string().default(
+          'https://worldchain-sepolia.g.alchemy.com/public',
+        ),
       }),
       validationOptions: {
         abortEarly: false,
@@ -42,6 +62,8 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
     UserModule,
     UploadsModule,
     LotteryModule,
+    BlockchainModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [

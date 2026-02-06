@@ -24,48 +24,97 @@ model User {
 }
 
 model Lottery {
-  id          String        @id @default(uuid())
-  title       String
-  description String?
-  prize       String
-  imageUrl    String?
-  ticketPrice Decimal       @db.Decimal(18, 8)
-  maxTickets  Int
-  soldTickets Int           @default(0)
-  startDate   DateTime
-  endDate     DateTime
-  status      LotteryStatus @default(PENDING)
-  region      String?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id                 String        @id @default(uuid())
+  title              String
+  description        String?
+  prize              String
+  imageUrl           String?
+  contractAddress    String?       // Blockchain contract address (nullable until deployed)
+  marketType         MarketType    @default(LOTTERY)
+  ticketPrice        String        @default("0") // Price per ticket in wei (stored as string for bigint)
+  goalAmount         String        @default("0") // Target prize pool in wei
+  sellerDeposit      String        @default("0") // RAFFLE: 15% of goalAmount in wei
+  prizePool          String        @default("0") // Accumulated from entries in wei
+  participantDeposit String        @default("5000000000000000") // Fixed 0.005 ETH in wei
+  preparedQuantity   Int           @default(1)   // Number of prizes for RAFFLE
+  participantCount   Int           @default(0)   // Number of participants (formerly soldTickets)
+  endTime            DateTime      // Market end time (renamed from endDate)
+  duration           Int?          // Duration in seconds for reference
+  status             LotteryStatus @default(CREATED)
+  region             String?
+  shippingRegions    String[]      @default([]) // Supported shipping regions
+  winners            String[]      @default([]) // Winner addresses (formerly single winnerId)
+  snapshotBlock      Int?          // Block number for randomness snapshot
+  commitment         String?       // Commitment hash for randomness
+  nonce              Int?          // Nonce for randomness reveal
+  openedAt           DateTime?     // Timestamp when market was opened
+  closedAt           DateTime?     // Timestamp when market was closed
+  revealedAt         DateTime?     // Timestamp when winner was revealed
+  completedAt        DateTime?     // Timestamp when market was completed
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
-  creatorId   String
-  creator     User          @relation("CreatorLotteries", fields: [creatorId], references: [id])
-  entries     Entry[]
-  winnerId    String?
+  creatorId          String
+  creator            User          @relation("CreatorLotteries", fields: [creatorId], references: [id])
+  entries            Entry[]
+
+  @@index([contractAddress])
 }
 
 model Entry {
-  id          String    @id @default(uuid())
-  ticketCount Int       @default(1)
-  createdAt   DateTime  @default(now())
+  id              String    @id @default(uuid())
+  ticketCount     Int       @default(1)
+  nullifierHash   String    // WorldID nullifier hash as hex string
+  paidAmount      String    @default("0") // ticketPrice + participantDeposit in wei
+  depositRefunded Boolean   @default(false)
+  isWinner        Boolean   @default(false)
+  createdAt       DateTime  @default(now())
 
-  userId      String
-  user        User      @relation(fields: [userId], references: [id])
-  lotteryId   String
-  lottery     Lottery   @relation(fields: [lotteryId], references: [id])
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  lotteryId       String
+  lottery         Lottery   @relation(fields: [lotteryId], references: [id])
 
   @@unique([userId, lotteryId])
+  @@unique([lotteryId, nullifierHash])
 }
 
+// Contract-aligned status enum (7 states matching WaffleLib.MarketStatus)
 enum LotteryStatus {
-  PENDING
-  ACTIVE
-  CLOSED
-  CALCULATING
-  WAITING_DELIVERY
+  CREATED    // Market created, awaiting seller to open
+  OPEN       // Accepting entries
+  CLOSED     // Entry period ended, awaiting randomness commitment
+  COMMITTED  // Randomness committed, awaiting reveal
+  REVEALED   // Winner revealed, awaiting confirmReceipt
+  COMPLETED  // Market successfully completed with receipt confirmed
+  FAILED     // Goal not met or timeout - refunds available
+}
+
+// Market type enum (matching WaffleLib.MarketType)
+enum MarketType {
+  LOTTERY    // Goal amount based (1 winner)
+  RAFFLE     // Prepared quantity based (multiple winners)
+}
+
+// Notification type enum for push notifications
+enum NotificationType {
+  ENTRY_CONFIRMED
+  WIN
   SHIPPED
-  COMPLETED
-  DISPUTED
-  CANCELLED
+  DELIVERED
+  REFUND
+  SALE_COMPLETE
+}
+
+model Notification {
+  id            String           @id @default(uuid())
+  walletAddress String
+  lotteryId     String?
+  type          NotificationType
+  title         String
+  message       String
+  isRead        Boolean          @default(false)
+  createdAt     DateTime         @default(now())
+
+  @@index([walletAddress, createdAt(sort: Desc)])
 }

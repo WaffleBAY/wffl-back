@@ -1,4 +1,4 @@
-import { LotteryStatus } from '@prisma/client';
+import { LotteryStatus, MarketType } from '@prisma/client';
 
 export class LotteryCreatorDto {
   id: string;
@@ -12,16 +12,55 @@ export class LotteryResponseDto {
   description: string | null;
   prize: string;
   imageUrl: string | null;
-  ticketPrice: string; // Keep as string to preserve Decimal precision
-  maxTickets: number;
-  soldTickets: number;
-  startDate: Date;
-  endDate: Date;
+
+  // Contract identification
+  contractAddress: string | null;
+
+  // Market type
+  marketType: MarketType;
+
+  // Economic fields (all as strings for BigInt precision)
+  ticketPrice: string;
+  goalAmount: string;
+  sellerDeposit: string;
+  prizePool: string;
+  participantDeposit: string;
+
+  // Conditions
+  preparedQuantity: number;
+  endTime: Date;
+  duration: number | null;
+
+  // Current state
   status: LotteryStatus;
+  participantCount: number;
+
+  // Winners
+  winners: string[];
+
+  // Shipping
+  shippingRegions: string[];
+
+  /**
+   * @deprecated Use shippingRegions instead. Kept for backward compatibility.
+   */
   region: string | null;
+
+  // Randomness (optional)
+  snapshotBlock: number | null;
+  commitment: string | null;
+  nonce: number | null;
+
+  // Timestamps
+  createdAt: Date;
+  openedAt: Date | null;
+  closedAt: Date | null;
+  revealedAt: Date | null;
+  completedAt: Date | null;
+
+  // Creator info
   creator: LotteryCreatorDto;
   entriesCount: number;
-  createdAt: Date;
 }
 
 export class PaginationDto {

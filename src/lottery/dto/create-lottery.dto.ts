@@ -5,8 +5,11 @@ import {
   IsInt,
   Min,
   MaxLength,
-  IsDateString,
+  IsEnum,
+  IsArray,
+  Matches,
 } from 'class-validator';
+import { MarketType } from '@prisma/client';
 
 export class CreateLotteryDto {
   @IsString()
@@ -27,21 +30,49 @@ export class CreateLotteryDto {
   @IsOptional()
   imageUrl?: string;
 
+  @IsEnum(MarketType)
+  @IsOptional()
+  marketType?: MarketType = MarketType.LOTTERY;
+
   @IsString()
   @IsNotEmpty()
-  ticketPrice: string; // String for Decimal(18,8) precision
+  @Matches(/^[0-9]+$/, { message: 'ticketPrice must be a numeric string (wei)' })
+  ticketPrice: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/^[0-9]+$/, { message: 'goalAmount must be a numeric string (wei)' })
+  goalAmount: string;
 
   @IsInt()
   @Min(1)
-  maxTickets: number;
+  @IsOptional()
+  preparedQuantity?: number = 1;
 
-  @IsDateString()
-  startDate: string;
+  @IsInt()
+  @Min(60) // At least 1 minute
+  duration: number;
 
-  @IsDateString()
-  endDate: string;
+  @IsInt()
+  @Min(1)
+  endTime: number; // Unix timestamp in seconds
 
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  shippingRegions?: string[] = [];
+
+  /**
+   * @deprecated Use shippingRegions instead. Kept for backward compatibility.
+   */
   @IsString()
   @IsOptional()
   region?: string;
+
+  @IsString()
+  @IsOptional()
+  @Matches(/^0x[a-fA-F0-9]{40}$/, {
+    message: 'contractAddress must be a valid Ethereum address',
+  })
+  contractAddress?: string;
 }
