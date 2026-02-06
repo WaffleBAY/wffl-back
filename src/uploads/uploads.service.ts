@@ -20,11 +20,10 @@ export class UploadsService {
       );
     }
 
-    // Base URL for serving static files (ngrok or localhost)
-    const port = this.configService.get<number>('PORT') || 3001;
-    this.baseUrl =
-      this.configService.get<string>('PUBLIC_URL') ||
-      `http://localhost:${port}`;
+    // Base URL for serving static files
+    // Use /api/proxy prefix so frontend can proxy image requests to backend
+    // This avoids ngrok browser warning page blocking <img> loads
+    this.baseUrl = '/api/proxy';
   }
 
   async uploadLocal(file: Express.Multer.File): Promise<string> {
