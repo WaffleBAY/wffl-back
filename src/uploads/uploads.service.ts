@@ -1,70 +1,48 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-import { readFile, unlink } from 'fs/promises';
+import { copyFile, mkdir, unlink } from 'fs/promises';
+import { existsSync } from 'fs';
+import { join } from 'path';
 import { v4 as uuidv4 } from 'uuid';
+
+const UPLOADS_DIR = './uploads/images';
 
 @Injectable()
 export class UploadsService {
   private readonly logger = new Logger(UploadsService.name);
-  private s3Client: S3Client | null = null;
-  private bucketName: string;
-  private publicUrl: string;
+  private readonly baseUrl: string;
 
   constructor(private configService: ConfigService) {
-    const accountId = this.configService.get<string>('R2_ACCOUNT_ID');
-    const accessKeyId = this.configService.get<string>('R2_ACCESS_KEY_ID');
-    const secretAccessKey = this.configService.get<string>('R2_SECRET_ACCESS_KEY');
-
-    this.bucketName = this.configService.get<string>('R2_BUCKET_NAME') || '';
-    this.publicUrl = this.configService.get<string>('R2_PUBLIC_URL') || '';
-
-    // Initialize S3Client only if credentials are provided
-    if (accountId && accessKeyId && secretAccessKey) {
-      this.s3Client = new S3Client({
-        region: 'auto',
-        endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-        credentials: {
-          accessKeyId,
-          secretAccessKey,
-        },
-      });
-      this.logger.log('R2 client initialized');
-    } else {
-      this.logger.warn('R2 credentials not configured - uploads will use mock URL');
+    // Ensure uploads directory exists
+    if (!existsSync(UPLOADS_DIR)) {
+      mkdir(UPLOADS_DIR, { recursive: true }).catch((err) =>
+        this.logger.error('Failed to create uploads directory', err),
+      );
     }
+
+    // Base URL for serving static files (ngrok or localhost)
+    const port = this.configService.get<number>('PORT') || 3001;
+    this.baseUrl =
+      this.configService.get<string>('PUBLIC_URL') ||
+      `http://localhost:${port}`;
   }
 
-  async uploadToR2(file: Express.Multer.File): Promise<string> {
-    if (!this.s3Client) {
-      this.logger.warn('R2 not configured, returning mock URL');
-      await this.deleteFile(file.path);
-      return 'https://mock-r2-url.example.com/images/mock-image.jpg';
-    }
-
-    const buffer = await readFile(file.path);
-
+  async uploadLocal(file: Express.Multer.File): Promise<string> {
     // Get file type from magic bytes
     const { fileTypeFromBuffer } = await import('file-type');
+    const { readFile } = await import('fs/promises');
+    const buffer = await readFile(file.path);
     const type = await fileTypeFromBuffer(buffer.subarray(0, 4100));
 
     const ext = type?.ext || 'bin';
-    const key = `images/${uuidv4()}.${ext}`;
+    const filename = `${uuidv4()}.${ext}`;
+    const destPath = join(UPLOADS_DIR, filename);
 
     try {
-      await this.s3Client.send(
-        new PutObjectCommand({
-          Bucket: this.bucketName,
-          Key: key,
-          Body: buffer,
-          ContentType: type?.mime || 'application/octet-stream',
-        }),
-      );
-
-      this.logger.log(`Uploaded image to R2: ${key}`);
-      return `${this.publicUrl}/${key}`;
+      await copyFile(file.path, destPath);
+      this.logger.log(`Saved image locally: ${destPath}`);
+      return `${this.baseUrl}/images/${filename}`;
     } finally {
-      // Always clean up temp file
       await this.deleteFile(file.path);
     }
   }

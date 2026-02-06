@@ -27,12 +27,8 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
         FRONTEND_URL: Joi.string().default('http://localhost:3000'),
         JWT_ACCESS_SECRET: Joi.string().required(),
         JWT_REFRESH_SECRET: Joi.string().required(),
-        // R2 environment variables (optional for now, required in production)
-        R2_ACCOUNT_ID: Joi.string().optional(),
-        R2_ACCESS_KEY_ID: Joi.string().optional(),
-        R2_SECRET_ACCESS_KEY: Joi.string().optional(),
-        R2_BUCKET_NAME: Joi.string().optional(),
-        R2_PUBLIC_URL: Joi.string().optional(),
+        // Public URL for image serving (ngrok URL in dev)
+        PUBLIC_URL: Joi.string().optional(),
         // World App Push notification variables (required in production)
         WORLD_APP_ID: Joi.string().when('NODE_ENV', {
           is: 'production',

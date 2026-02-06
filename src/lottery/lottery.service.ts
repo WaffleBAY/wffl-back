@@ -19,6 +19,7 @@ import { CreateEntryDto } from './dto/create-entry.dto';
 type LotteryWithRelations = Lottery & {
   creator: {
     id: string;
+    walletAddress: string;
     username: string | null;
     profilePictureUrl: string | null;
   };
@@ -69,6 +70,7 @@ export class LotteryService {
       completedAt: lottery.completedAt,
       creator: {
         id: lottery.creator.id,
+        walletAddress: lottery.creator.walletAddress,
         username: lottery.creator.username,
         profilePictureUrl: lottery.creator.profilePictureUrl,
       },
@@ -106,6 +108,7 @@ export class LotteryService {
           creator: {
             select: {
               id: true,
+              walletAddress: true,
               username: true,
               profilePictureUrl: true,
             },
@@ -144,6 +147,7 @@ export class LotteryService {
         creator: {
           select: {
             id: true,
+            walletAddress: true,
             username: true,
             profilePictureUrl: true,
           },
@@ -182,7 +186,7 @@ export class LotteryService {
         shippingRegions: dto.shippingRegions ?? [],
         region: dto.region, // Keep for backward compat
         creatorId: userId,
-        status: LotteryStatus.CREATED, // New default status
+        status: LotteryStatus.OPEN, // Contract now starts as OPEN directly
         contractAddress: dto.contractAddress, // Save contract address from frontend
       },
     });

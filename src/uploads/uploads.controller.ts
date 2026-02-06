@@ -24,7 +24,7 @@ export class UploadsController {
   @UseInterceptors(FileInterceptor('image'))
   async uploadImage(
     @UploadedFile() file: Express.Multer.File,
-    @CurrentUser('sub') userId: string,
+    @CurrentUser('userId') userId: string,
   ): Promise<UploadResponseDto> {
     // Ensure user is authenticated (userId comes from JWT)
     if (!userId) {
@@ -55,9 +55,9 @@ export class UploadsController {
         );
       }
 
-      // Upload to R2 and get public URL
+      // Save locally and get public URL
       // Service handles temp file cleanup after upload
-      const url = await this.uploadsService.uploadToR2(file);
+      const url = await this.uploadsService.uploadLocal(file);
       return { url };
     } catch (error) {
       // Clean up temp file on validation errors

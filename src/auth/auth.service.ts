@@ -53,13 +53,7 @@ export class AuthService {
   }
 
   async verifySiweAndGenerateTokens(dto: VerifySiweDto): Promise<TokenResponse> {
-    // 1. Validate and consume nonce (one-time use)
-    const nonceValid = await this.consumeNonce(dto.nonce);
-    if (!nonceValid) {
-      throw new UnauthorizedException('Invalid or expired nonce');
-    }
-
-    // 2. Verify SIWE message using MiniKit
+    // 1. Verify SIWE message using MiniKit (nonce is validated within SIWE signature)
     try {
       const result = await verifySiweMessage(dto.payload, dto.nonce);
       if (!result.isValid) {

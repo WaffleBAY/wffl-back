@@ -35,7 +35,7 @@ model Lottery {
   goalAmount         String        @default("0") // Target prize pool in wei
   sellerDeposit      String        @default("0") // RAFFLE: 15% of goalAmount in wei
   prizePool          String        @default("0") // Accumulated from entries in wei
-  participantDeposit String        @default("5000000000000000") // Fixed 0.005 ETH in wei
+  participantDeposit String        @default("5000000000000000000") // Fixed 5 WLD in wei
   preparedQuantity   Int           @default(1)   // Number of prizes for RAFFLE
   participantCount   Int           @default(0)   // Number of participants (formerly soldTickets)
   endTime            DateTime      // Market end time (renamed from endDate)

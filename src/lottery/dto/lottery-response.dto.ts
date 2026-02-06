@@ -2,6 +2,7 @@ import { LotteryStatus, MarketType } from '@prisma/client';
 
 export class LotteryCreatorDto {
   id: string;
+  walletAddress: string;
   username: string | null;
   profilePictureUrl: string | null;
 }
