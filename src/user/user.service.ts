@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { UserResponseDto } from './dto/user-response.dto';
 import { WorldIdVerificationDto } from './dto/worldid-verification.dto';
 import { EntryListResponseDto } from './dto/entry-response.dto';
+import { LotteryListResponseDto } from '../lottery/dto/lottery-response.dto';
 
 @Injectable()
 export class UserService {
@@ -118,6 +119,7 @@ export class UserService {
               creator: {
                 select: {
                   id: true,
+                  walletAddress: true,
                   username: true,
                   profilePictureUrl: true,
                 },
@@ -144,6 +146,8 @@ export class UserService {
           prize: entry.lottery.prize,
           imageUrl: entry.lottery.imageUrl,
           contractAddress: entry.lottery.contractAddress,
+          marketType: entry.lottery.marketType,
+          ticketPrice: entry.lottery.ticketPrice,
           status: entry.lottery.status,
           endTime: entry.lottery.endTime,
           creator: entry.lottery.creator,
@@ -181,6 +185,7 @@ export class UserService {
               creator: {
                 select: {
                   id: true,
+                  walletAddress: true,
                   username: true,
                   profilePictureUrl: true,
                 },
@@ -207,10 +212,95 @@ export class UserService {
           prize: entry.lottery.prize,
           imageUrl: entry.lottery.imageUrl,
           contractAddress: entry.lottery.contractAddress,
+          marketType: entry.lottery.marketType,
+          ticketPrice: entry.lottery.ticketPrice,
           status: entry.lottery.status,
           endTime: entry.lottery.endTime,
           creator: entry.lottery.creator,
         },
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
+   * Find paginated lotteries created by this user.
+   */
+  async findMyLotteries(
+    userId: string,
+    query: { page?: number; limit?: number },
+  ): Promise<LotteryListResponseDto> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+    const skip = (page - 1) * limit;
+
+    const [lotteries, total] = await Promise.all([
+      this.prisma.lottery.findMany({
+        where: { creatorId: userId },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          creator: {
+            select: {
+              id: true,
+              walletAddress: true,
+              username: true,
+              profilePictureUrl: true,
+            },
+          },
+          _count: {
+            select: {
+              entries: true,
+            },
+          },
+        },
+      }),
+      this.prisma.lottery.count({ where: { creatorId: userId } }),
+    ]);
+
+    return {
+      items: lotteries.map((lottery) => ({
+        id: lottery.id,
+        title: lottery.title,
+        description: lottery.description,
+        prize: lottery.prize,
+        imageUrl: lottery.imageUrl,
+        contractAddress: lottery.contractAddress,
+        marketType: lottery.marketType,
+        ticketPrice: lottery.ticketPrice,
+        goalAmount: lottery.goalAmount,
+        sellerDeposit: lottery.sellerDeposit,
+        prizePool: lottery.prizePool,
+        participantDeposit: lottery.participantDeposit,
+        preparedQuantity: lottery.preparedQuantity,
+        endTime: lottery.endTime,
+        duration: lottery.duration,
+        status: lottery.status,
+        participantCount: lottery.participantCount,
+        winners: lottery.winners,
+        shippingRegions: lottery.shippingRegions,
+        region: lottery.region,
+        snapshotBlock: lottery.snapshotBlock,
+        commitment: lottery.commitment,
+        nonce: lottery.nonce,
+        createdAt: lottery.createdAt,
+        openedAt: lottery.openedAt,
+        closedAt: lottery.closedAt,
+        revealedAt: lottery.revealedAt,
+        completedAt: lottery.completedAt,
+        creator: {
+          id: lottery.creator.id,
+          walletAddress: lottery.creator.walletAddress,
+          username: lottery.creator.username,
+          profilePictureUrl: lottery.creator.profilePictureUrl,
+        },
+        entriesCount: lottery._count.entries,
       })),
       pagination: {
         page,

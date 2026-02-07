@@ -1,5 +1,6 @@
 export class EntryLotteryCreatorDto {
   id: string;
+  walletAddress: string;
   username: string | null;
   profilePictureUrl: string | null;
 }
@@ -11,6 +12,8 @@ export class EntryLotteryDto {
   prize: string;
   imageUrl: string | null;
   contractAddress: string | null;
+  marketType: string;
+  ticketPrice: string;
   status: string;
   endTime: Date;
   creator: EntryLotteryCreatorDto;
